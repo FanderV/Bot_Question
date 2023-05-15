@@ -4,18 +4,36 @@ import json
 import datetime
 import time
 import configparser
+import os
 
-# Конфигурация
-config = configparser.ConfigParser()
-config.read('config.ini')
+# Загрузка значений из переменных среды
+token = os.getenv('TOKEN')
+id_chat = os.getenv('CHAT_ID')
+hour = os.getenv('QUESTION_HOUR')
+minute = os.getenv('QUESTION_MINUTE')
 
-# Инициализация токена и идентификатора чата из конфигурационного файла
-token = telebot.TeleBot(config['telegram']['token'])
-id_chat = config['telegram']['chat_id']
+# отладка перменных сред
+print("TOKEN:", token)
+print("CHAT_ID:", id_chat)
+print("QUESTION_HOUR:", hour)
+print("QUESTION_MINUTE:", minute)
 
-# Получение часа и минуты опроса из конфигурационного файла
-hour = int(config['telegram']['hour'])
-minute = int(config['telegram']['min'])
+# Если переменные среды не определены, загрузка значений из конфигурационного файла
+if not token or not id_chat or not hour or not minute:
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+
+    if not token:
+        token = config['telegram']['token']
+    if not id_chat:
+        id_chat = config['telegram']['chat_id']
+    if not hour:
+        hour = config['telegram']['hour']
+    if not minute:
+        minute = config['telegram']['minute']
+
+# Инициализация бота
+bot = telebot.TeleBot(token)
 
 # Переменные для хранения времени последней отправки опроса, данных о календаре и текущего года
 last_time = None
@@ -58,14 +76,15 @@ def is_workday(date):
     return True
 
 
-@token.message_handler(commands=['question'])
+# Декоратор обработчика команды
+@bot.message_handler(commands=['question'])
 def send_question(message):
     # Обработчик команды для отправки опроса
     global last_time
 
     now = datetime.datetime.now()
     if is_workday(now.date()) and (last_time is None or now.date() > last_time.date()):
-        token.send_poll(
+        bot.send_poll(
             chat_id=id_chat,
             question='Где Вы сегодня работаете?',
             options=['Офис', 'Дом', 'Объект'],
@@ -76,7 +95,7 @@ def send_question(message):
 
 while True:
     now = datetime.datetime.now()
-    if now.hour == hour and now.minute == minute and is_workday(now.date()):
+    if now.hour == int(hour) and now.minute == int(minute) and is_workday(now.date()):
         try:
             send_question(None)
         except Exception as e:
@@ -89,3 +108,5 @@ while True:
         calendarnaya_data = load_calendar_data(this_year)
 
     time.sleep(30)
+
+bot.polling()
